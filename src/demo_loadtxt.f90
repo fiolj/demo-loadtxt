@@ -6,7 +6,6 @@ program demo_loadtxt
     USE stdlib_io, only: loadtxt, savetxt
     USE stdlib_strings, only: to_string
     USE stdlib_math, only: linspace
-    USE new_io, only: loadtxt2
     USE mod_loadtxt, only: loadtxt1 => loadtxt
     implicit none
 
@@ -58,6 +57,7 @@ contains
         real(dp) :: ti, tf
         !
         ! ------------------------------------------------------------
+        ! Original fortran_stdlib loadtxt
         print '(A)', "For "//to_string(Nloop, '(I2.2)')//" files:"
         call cpu_time(ti)
         do i = 1, Nloop
@@ -65,31 +65,17 @@ contains
             call loadtxt(fname, x, skiprows=1)
         end do
         call cpu_time(tf)
-        print *, 'loadtxt took '//to_string(tf - ti, '(g0.5)')//' sec'
+        print *, 'original loadtxt took '//to_string(tf - ti, '(g0.5)')//' sec'
 
-        call cpu_time(ti)
-        do i = 1, Nloop
-            fname = ddir//'example'//to_string(i, "(i2.2)")//'.txt'
-            call loadtxt2(fname, x)
-        end do
-        call cpu_time(tf)
-        print *, 'loadtxt2-fast took '//to_string(tf - ti, '(f7.5)')//' sec'
-
-        ! call cpu_time(ti)
-        ! do i = 1, Nloop
-        !     fname = ddir//'example'//to_string(i, "(i2.2)")//'.txt'
-        !     call loadtxt2(fname, x, fast=.False.)
-        ! end do
-        ! call cpu_time(tf)
-        ! print *, 'loadtxt2-versatile took '//to_string(tf - ti, '(g0.5)')//' sec'
-
+        ! ------------------------------------------------------------
+        ! Proposed loadtxt-stream
         call cpu_time(ti)
         do i = 1, Nloop
             fname = ddir//'example'//to_string(i, "(i2.2)")//'.txt'
             call loadtxt1(fname, x)
         end do
         call cpu_time(tf)
-        print *, 'loadtxt1 took '//to_string(tf - ti, '(g0.5)')//' sec'
+        print *, 'loadtxt-stream took '//to_string(tf - ti, '(g0.5)')//' sec'
         print "(A)", "Each file has "//to_string(size(x))//" values"
     end subroutine load_data
 
