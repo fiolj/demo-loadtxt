@@ -22,6 +22,7 @@ program test_loadtxt
         if (.not. allocated(d)) error stop 'loadtxt did not allocate output'
         if (size(d, 1) /= 10) error stop 'unexpected number of rows'
         if (size(d, 2) /= 3) error stop 'unexpected number of columns'
+        print *, "loadtxt with "//fname//" test passed"
     end do
 
     ! Test several possible data files with delimiters
@@ -34,6 +35,7 @@ program test_loadtxt
         if (.not. allocated(d)) error stop 'loadtxt did not allocate output'
         if (size(d, 1) /= 10) error stop 'unexpected number of rows'
         if (size(d, 2) /= 3) error stop 'unexpected number of columns'
+        print *, "loadtxt with "//fname//" test passed"
     end do
 
     ! Test data file with overlapping comments (,,) and delimiters (,)
@@ -41,9 +43,10 @@ program test_loadtxt
     print *, '-----------------------------------'
     print *, "Testing loadtxt with "//fname
     if (allocated(d)) deallocate (d)
-    call loadtxt(ddir//fname, d, delimiter=',')
+    call loadtxt(ddir//'example3.txt', d, delimiter=',', comments=',,')
     if (.not. allocated(d)) error stop 'loadtxt did not allocate output'
     if (size(d, 1) /= 10) error stop 'unexpected number of rows'
     if (size(d, 2) /= 3) error stop 'unexpected number of columns'
+    print *, "loadtxt with "//fname//" test passed"
 
 end program test_loadtxt
