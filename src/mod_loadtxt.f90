@@ -30,14 +30,14 @@ contains
         integer :: u, fsze, nrows, nrows_effective, ncols, j, jj(1), start_effective
         character(:), allocatable, target :: ff
         character(len=:), pointer :: ffp
-        integer :: line_start, line_end
+        integer :: line_start, line_end, p
         character(len=:), allocatable :: delim_
         character(len=:), allocatable :: comment_
         integer :: row, row_effective, err
         integer :: len_comment, len_delim
         real(dp) :: val
         !=============================================================================
-        err = 1
+        ! err = 1
         comment_ = optval(comments, comment_default)
         len_comment = len(comment_)
         delim_ = optval(delimiter, delimiter_default)
@@ -55,7 +55,7 @@ contains
         read (u) ff
         close (u)
         ffp => ff
-        start_effective = 1              ! Used after skiplines (is it worth?)
+        start_effective = 1     ! Start after skiplines
         !----------------------------------------- Count lines and columns
         nrows = 0               ! Total number of rows (including empty and commented lines)
         nrows_effective = 0     ! rows with data
@@ -63,28 +63,26 @@ contains
         do while (len(ffp) > 0)
             line_end = shift_to_eol(ffp)
             if (line_end > len(ffp)) exit  ! No more lines
-            line_start = verify(ffp(:line_end), blanks) ! Skip initial blanks in line
-
+            line_start = shift_to_nonwhitespace(ffp(:line_end)) ! Skip initial blanks in line
             nrows = nrows + 1
             if (nrows <= skiplines_) then
-                start_effective = start_effective + line_end ! Remember position to start when reading
+                start_effective = start_effective + line_end ! Remember position to use aS starting point when reading
                 ffp => ffp(line_end + 1:) ! Skip the line
                 cycle
             end if
 
-            if (ffp(line_start:line_start + len_comment - 1) == comment_ .or. &
+            if (starts_with(ffp(line_start:), comment_) .or. &
                 (line_start == line_end)) then
                 ffp => ffp(line_end + 1:) ! Skip comment lines and blank lines
                 cycle
             end if
             nrows_effective = nrows_effective + 1
-            ! if ncols is not set yet, determine the number of columns from the first numerical line
-            ! by counting the number of delimiters + 1
+            !
+            ! if ncols is not set yet, determine the number of columns
             if (ncols == 0) then
                 ncols = number_cols_line(ffp(line_start:line_end), delim_, comment_)
             end if
-
-            ffp => ffp(line_end + 1:)
+            ffp => ffp(line_end + 1:) ! go to next line
         end do
 
         !----------------------------------------- Allocate and read data
@@ -106,8 +104,9 @@ contains
         nrows = nrows - skiplines_
         do row = 1, nrows
             line_end = shift_to_eol(ffp)
-            line_start = verify(ffp(:line_end), blanks) ! Avoid initial blanks in line
-            if (ffp(line_start:line_start + len_comment - 1) == comment_ .or. &
+            line_start = shift_to_nonwhitespace(ffp(:line_end)) ! Avoid initial blanks in line
+
+            if (starts_with(ffp(line_start:), comment_) .or. &
                 (line_start == line_end)) then
                 ffp => ffp(line_end + 1:) ! Skip comment lines and blank lines
                 cycle
@@ -117,43 +116,46 @@ contains
             if (.not. present(usecols)) then
                 do j = 1, ncols
                     val = to_num_from_stream(ffp, val)
-                    if (starts_with(ffp, delim_)) ffp => ffp(len(delim_) + 1:)
                     d(row_effective, j) = val
+                    ffp => ffp(shift_after_delim(ffp, delim_):)
                 end do
             else
                 do j = 1, ncols
                     val = to_num_from_stream(ffp, val)
-                    if (starts_with(ffp, delim_)) ffp => ffp(len(delim_) + 1:)
+                    p = shift_after_delim(ffp, delim_)
                     jj = findloc(usecols, j)
-                    if (j /= 0) d(row_effective, jj) = val
+                    if (jj(1) /= 0) d(row_effective, jj) = val
+                    ffp => ffp(p:)
+                    !
+                    if (scan(ffp(1:1), nl) /= 0) then ! If EOL => no more cols
+                        exit
+                    end if
+
                 end do
             end if
-            if (row_effective >= max_rows_) then
-                err = 0
-                return
-            end if
-
+            if (row_effective >= max_rows_) return
             line_end = shift_to_eol(ffp)
             ffp => ffp(line_end + 1:)
         end do
 
-        err = 0
     end subroutine
 
     elemental function shift_to_eol(s) result(p)
         !! move string to position of the next end-of-line character
-        character(*), intent(in) :: s !! character chain
+        character(len=*), intent(in) :: s !! character chain
         integer :: p !! position
         !----------------------------------------------
         p = scan(s, nl)
-        ! If CRLF, move to LF
-        if (p < len(s)) then
+        if (p < len(s)) then ! If CRLF, move to LF
             if (s(p:p + 1) == nl) p = p + 1
         end if
 
     end function shift_to_eol
 
+    !>  Determine the number of columns from the numerical line
+    !! by counting the number of delimiters + 1
     elemental function number_cols_line(ffp, delimiter, comment) result(ncols)
+        ! function number_cols_line(ffp, delimiter, comment) result(ncols)
         implicit none
         character(len=*), intent(in) :: ffp !<
         character(len=*), intent(in) :: delimiter !<
@@ -161,13 +163,12 @@ contains
         integer :: ncols
         logical :: last_delim
         integer :: pos, len_comment
-
         ncols = 0
         len_comment = len(comment)
         if (delimiter == delimiter_default) then
             last_delim = .true.
             do pos = 1, len(ffp) - 1
-                if (ffp(pos:pos + len_comment - 1) == comment) then
+                if (starts_with(ffp(pos:), comment)) then
                     return
                 else if (last_delim .and. .not. is_blank(ffp(pos:pos))) then
                     ncols = ncols + 1
@@ -176,7 +177,7 @@ contains
             end do
         else
             do pos = 1, len(ffp) - 1
-                if (ffp(pos:pos + len_comment - 1) == comment) then
+                if (starts_with(ffp(pos:), comment)) then
                     return
                 else if (starts_with(ffp(pos:), delimiter)) then
                     ncols = ncols + 1
@@ -185,6 +186,39 @@ contains
             ncols = ncols + 1
         end if
     end function number_cols_line
+
+    elemental function shift_to_nonwhitespace(s) result(p)
+    !! move string to position of the next non white space character
+        character(len=*), intent(in) :: s !! character chain
+        integer :: p !! position
+        !----------------------------------------------
+        p = verify(s, blanks)
+        if (p == 0) p = len(s)
+    end function shift_to_nonwhitespace
+
+    elemental function shift_to_whitespace(s) result(p)
+    !! move string to position of the next non white space character
+        character(len=*), intent(in) :: s !! character chain
+        integer :: p !! position
+        !----------------------------------------------
+        p = scan(s, blanks)
+        if (p == 0) p = len(s)
+    end function shift_to_whitespace
+
+    elemental function shift_after_delim(s, delim) result(p)
+    !! move string to position of the next non white space character
+        character(len=*), intent(in) :: s !! character chain
+        character(len=*), intent(in) :: delim !! character chain
+        integer :: p !! position
+        !----------------------------------------------
+        if (delim == delimiter_default) then
+            p = shift_to_nonwhitespace(s)
+        else
+            p = len(delim)
+            if (p > len(s)) p = len(s)
+        end if
+
+    end function shift_after_delim
 
 end module mod_loadtxt
 
