@@ -8,8 +8,8 @@ program test_loadtxt
     implicit none
 
     character(len=*), parameter :: ddir = "../data/"
-    real(dp), allocatable :: d(:, :)
-    integer :: i
+    real(dp), allocatable :: d(:, :), d1(:, :)
+    integer :: i, nrows, ncols
     character(len=12) :: fname
 
     ! Test several possible data files with blanks
@@ -19,9 +19,11 @@ program test_loadtxt
         print *, "Testing loadtxt with "//fname
         if (allocated(d)) deallocate (d)
         call loadtxt(ddir//fname, d)
-        if (.not. allocated(d)) error stop 'loadtxt did not allocate output'
-        if (size(d, 1) /= 10) error stop 'unexpected number of rows'
-        if (size(d, 2) /= 3) error stop 'unexpected number of columns'
+        nrows = size(d, 1)
+        ncols = size(d, 2)
+        if (ncols == 0 .or. nrows == 0) error stop 'loadtxt did not read data'
+        if (nrows /= 10) error stop 'unexpected number of rows'
+        if (ncols /= 3) error stop 'unexpected number of columns'
         print *, "loadtxt with "//fname//" test passed"
     end do
 
@@ -32,9 +34,11 @@ program test_loadtxt
         print *, "Testing loadtxt with "//fname
         if (allocated(d)) deallocate (d)
         call loadtxt(ddir//fname, d, delimiter=',')
-        if (.not. allocated(d)) error stop 'loadtxt did not allocate output'
-        if (size(d, 1) /= 10) error stop 'unexpected number of rows'
-        if (size(d, 2) /= 3) error stop 'unexpected number of columns'
+        nrows = size(d, 1)
+        ncols = size(d, 2)
+        if (ncols == 0 .or. nrows == 0) error stop 'loadtxt did not read data'
+        if (nrows /= 10) error stop 'unexpected number of rows'
+        if (ncols /= 3) error stop 'unexpected number of columns'
         print *, "loadtxt with "//fname//" test passed"
     end do
 
@@ -44,9 +48,11 @@ program test_loadtxt
     print *, "Testing loadtxt with "//fname
     if (allocated(d)) deallocate (d)
     call loadtxt(ddir//fname, d, delimiter=',', comments=',,')
-    if (.not. allocated(d)) error stop 'loadtxt did not allocate output'
-    if (size(d, 1) /= 10) error stop 'unexpected number of rows'
-    if (size(d, 2) /= 3) error stop 'unexpected number of columns'
+    nrows = size(d, 1)
+    ncols = size(d, 2)
+    if (ncols == 0 .or. nrows == 0) error stop 'loadtxt did not read data'
+    if (nrows /= 10) error stop 'unexpected number of rows'
+    if (ncols /= 3) error stop 'unexpected number of columns'
     print *, "loadtxt with "//fname//" test passed"
 
     ! Test max_rows option
@@ -54,10 +60,31 @@ program test_loadtxt
     print *, '-----------------------------------'
     print *, "Testing loadtxt with "//fname
     if (allocated(d)) deallocate (d)
+    call loadtxt(ddir//fname, d1)
     call loadtxt(ddir//fname, d, max_rows=3)
-    if (.not. allocated(d)) error stop 'loadtxt did not allocate output'
-    if (size(d, 1) /= 3) error stop 'unexpected number of rows'
-    if (size(d, 2) /= 3) error stop 'unexpected number of columns'
+    nrows = size(d, 1)
+    ncols = size(d, 2)
+    if (ncols == 0 .or. nrows == 0) error stop 'loadtxt did not read data'
+    if (nrows /= 3) error stop 'unexpected number of rows'
+    if (ncols /= 3) error stop 'unexpected number of columns'
+    if (any(d(:, :) /= d1(1:3, :))) error stop 'reading with max_rows'
+
     print *, "loadtxt with max_rows option test passed"
+
+    ! Test use_cols option
+    fname = "example1.dat"
+    print *, '-----------------------------------'
+    print *, "Testing loadtxt with "//fname
+    if (allocated(d)) deallocate (d)
+    call loadtxt(ddir//fname, d1)
+    call loadtxt(ddir//fname, d, usecols=[3, 1])
+    nrows = size(d, 1)
+    ncols = size(d, 2)
+    if (ncols == 0 .or. nrows == 0) error stop 'loadtxt did not read data'
+    if (nrows /= 10) error stop 'unexpected number of rows'
+    if (ncols /= 2) error stop 'unexpected number of columns'
+    if (any(d(:, 1) /= d1(:, 3)) .or. any(d(:, 2) /= d1(:, 1))) error stop 'reading with usecols'
+
+    print *, "loadtxt with usecols option test passed"
 
 end program test_loadtxt

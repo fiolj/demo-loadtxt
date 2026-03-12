@@ -1,8 +1,6 @@
 module mod_loadtxt
 
     use stdlib_kinds, only: int8, dp
-    !JF: new
-    ! use stdlib_ascii, only: is_blank
     use stdlib_ascii, only: is_blank, CR, LF, TAB
     use stdlib_strings, only: starts_with
     use stdlib_optval, only: optval
@@ -14,8 +12,6 @@ module mod_loadtxt
 
     character(len=1), parameter :: delimiter_default = " "
     character(len=1), parameter :: comment_default = "#"
-    ! JF: new for comparing directly chars instead of integers
-    integer(int8), parameter :: iLF = 10, iCR = 13
     character(len=2), parameter :: nl = CR//LF
     character(len=*), parameter :: blanks = " "//TAB
 
@@ -31,7 +27,7 @@ contains
         integer, intent(in), optional :: usecols(:) !! Array of column indices to read. If not provided, all columns are read.
         !-----------------------------------------------------------------------------
         integer :: skiplines_, max_rows_
-        integer :: u, fsze, nrows, nrows_effective, ncols, j, start_effective
+        integer :: u, fsze, nrows, nrows_effective, ncols, j, jj(1), start_effective
         character(:), allocatable, target :: ff
         character(len=:), pointer :: ffp
         integer :: line_start, line_end
@@ -47,10 +43,13 @@ contains
         delim_ = optval(delimiter, delimiter_default)
         len_delim = len(delim_)
         skiplines_ = optval(skiplines, 0)
-        max_rows_ = optval(max_rows, -1)
+        ! max_rows will be set later
         !----------------------------------------- Load file in a single string
         open (newunit=u, file=filename, status='old', access='stream', action="read", iostat=err)
-        if (err /= 0) return
+        if (err /= 0) then
+            allocate (d(0, 0))
+            return
+        end if
         inquire (unit=u, size=fsze)
         allocate (character(fsze) :: ff)
         read (u) ff
@@ -58,7 +57,8 @@ contains
         ffp => ff
         start_effective = 1              ! Used after skiplines (is it worth?)
         !----------------------------------------- Count lines and columns
-        nrows = 0; nrows_effective = 0
+        nrows = 0               ! Total number of rows (including empty and commented lines)
+        nrows_effective = 0     ! rows with data
         ncols = 0
         do while (len(ffp) > 0)
             line_end = shift_to_eol(ffp)
@@ -67,17 +67,19 @@ contains
 
             nrows = nrows + 1
             if (nrows <= skiplines_) then
-                start_effective = start_effective + line_end ! JF: Remember this position in order to not repeat when reading
+                start_effective = start_effective + line_end ! Remember position to start when reading
                 ffp => ffp(line_end + 1:) ! Skip the line
                 cycle
             end if
+
             if (ffp(line_start:line_start + len_comment - 1) == comment_ .or. &
                 (line_start == line_end)) then
                 ffp => ffp(line_end + 1:) ! Skip comment lines and blank lines
                 cycle
             end if
             nrows_effective = nrows_effective + 1
-            ! if ncols is not set yet, determine the number of columns from the first numerical line by counting the number of delimiters+1
+            ! if ncols is not set yet, determine the number of columns from the first numerical line
+            ! by counting the number of delimiters + 1
             if (ncols == 0) then
                 ncols = number_cols_line(ffp(line_start:line_end), delim_, comment_)
             end if
@@ -85,10 +87,10 @@ contains
             ffp => ffp(line_end + 1:)
         end do
 
-        if (ncols == 0 .or. nrows_effective == 0) return
         !----------------------------------------- Allocate and read data
         max_rows_ = min(optval(max_rows, nrows_effective), nrows_effective)
-        if (max_rows_ <= 0) then
+        ! If there is no data we will return an empty array
+        if ((max_rows_ <= 0) .or. (ncols == 0)) then
             allocate (d(0, 0))
             return
         end if
@@ -122,7 +124,8 @@ contains
                 do j = 1, ncols
                     val = to_num_from_stream(ffp, val)
                     if (starts_with(ffp, delim_)) ffp => ffp(len(delim_) + 1:)
-                    if (any(usecols == j)) d(row_effective, j) = val
+                    jj = findloc(usecols, j)
+                    if (j /= 0) d(row_effective, jj) = val
                 end do
             end if
             if (row_effective >= max_rows_) then
