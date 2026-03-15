@@ -22,7 +22,7 @@ contains
         integer, intent(in) :: Nloop
         real(dp), allocatable :: x(:, :)
         integer :: i
-        real(dp) :: ti, tf
+        real(dp) :: ti, tf, t1, t2
         !
         ! ------------------------------------------------------------
         print '(A)', "For "//to_string(Nloop, '(I2.2)')//" files:"
@@ -32,7 +32,8 @@ contains
             call loadtxt(fname, x, skiprows=1)
         end do
         call cpu_time(tf)
-        print *, 'Original loadtxt took '//to_string(tf - ti, '(g0.5)')//' sec'
+        t1 = tf - ti
+        print '(a)', 'Original loadtxt took '//to_string(t1, '(f7.5)')//' sec'
 
         call cpu_time(ti)
         do i = 1, Nloop
@@ -40,8 +41,15 @@ contains
             call loadtxt1(fname, x)
         end do
         call cpu_time(tf)
-        print *, 'loadtxt - stream took '//to_string(tf - ti, '(g0.5)')//' sec'
+        t2 = tf - ti
+        print '(a)', 'loadtxt - stream took '//to_string(t2, '(f7.5)')//' sec'
+        print '(a)', "Speed-up factor = "//to_string(t1 / t2, '(g0.4)')
         print "(A)", "Each file has "//to_string(size(x))//" values"
+        ! Let's save the last file
+        ! fname = ddir//'example'//to_string(i, "(i2.2)")//'.dat'
+        ! print *, fname
+        ! call savetxt(fname, x, fmt='es23.16e3')
+
     end subroutine load_data
 
     subroutine create_data(Nloop, Ndat)
